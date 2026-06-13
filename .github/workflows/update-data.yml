@@ -1,0 +1,63 @@
+name: Update flight data
+
+on:
+  schedule:
+    # Run on the 15th of every month at 06:00 UTC (BTS releases ~2 months lag)
+    - cron: '0 6 15 * *'
+  workflow_dispatch:  # allow manual trigger
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('data-pipeline/requirements.txt') }}
+
+      - name: Install Python deps
+        run: pip install -r data-pipeline/requirements.txt
+
+      - name: Cache raw BTS downloads
+        uses: actions/cache@v4
+        with:
+          path: data-pipeline/raw
+          key: bts-raw-${{ github.run_id }}
+          restore-keys: bts-raw-
+
+      - name: Download new BTS data
+        # Downloads last 2 years; cache means only new months are fetched
+        run: |
+          YEAR=$(date +%Y)
+          PREV_YEAR=$((YEAR - 1))
+          python data-pipeline/download_bts.py --years $PREV_YEAR $YEAR --output data-pipeline/raw
+
+      - name: Process data → summary.json
+        run: python data-pipeline/process_data.py --input data-pipeline/raw --output public/data
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Build site
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=flight-taxi-stats
