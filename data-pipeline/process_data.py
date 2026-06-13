@@ -6,12 +6,19 @@ Usage:
 """
 import argparse
 import json
-import math
 from datetime import date
 from pathlib import Path
 
 import pandas as pd
 import numpy as np
+
+# Shared taxi-out bin definition (must match the frontend's expectations).
+# bin i covers [BIN_EDGES[i], BIN_EDGES[i+1]); final edge (999) is "120+".
+BIN_EDGES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 75, 90, 120, 999]
+NBINS = len(BIN_EDGES) - 1
+TOD_LABELS = ["Early (12a-6a)", "Morning (6a-12p)", "Afternoon (12p-6p)", "Evening (6p-12a)"]
+DOW_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+TRAP_THRESHOLD = 15
 
 AIRLINE_NAMES = {
     "AA": "American Airlines",
@@ -141,16 +148,65 @@ def build_trends(df: pd.DataFrame) -> list[dict]:
     for (year, month, carrier), grp in df.groupby(["Year", "Month", "Reporting_Airline"]):
         if len(grp) < 100:
             continue
+        on_time = grp[grp["DepDel15"] == 0]
+        trap = float((on_time["TaxiOut"] > TRAP_THRESHOLD).mean()) if len(on_time) else 0.0
         result.append({
             "year": int(year),
             "month": int(month),
             "carrier_code": carrier,
-            "mean": round(float(grp["TaxiOut"].mean()), 2),
             "median": round(float(grp["TaxiOut"].median()), 2),
+            "p90": round(float(grp["TaxiOut"].quantile(0.90)), 2),
             "p95": round(float(grp["TaxiOut"].quantile(0.95)), 2),
+            "trap_rate": round(trap, 4),
             "count": int(len(grp)),
         })
     return sorted(result, key=lambda x: (x["year"], x["month"], x["carrier_code"]))
+
+
+def add_derived(df: pd.DataFrame) -> pd.DataFrame:
+    """Add day-of-week, time-of-day bucket, and taxi-out bin index columns."""
+    df = df.copy()
+    df["dow"] = pd.to_datetime(
+        dict(year=df["Year"], month=df["Month"], day=df["DayofMonth"]),
+        errors="coerce",
+    ).dt.weekday
+    hour = (df["CRSDepTime"].fillna(0).astype(int) // 100).clip(0, 23)
+    df["tod"] = (hour // 6).clip(0, 3)
+    df["binidx"] = pd.cut(df["TaxiOut"], bins=BIN_EDGES, right=False, labels=False)
+    df["binidx"] = df["binidx"].clip(0, NBINS - 1).astype("Int64")
+    df = df[df["dow"].notna() & df["binidx"].notna()]
+    return df
+
+
+def build_routes(df: pd.DataFrame, top_n: int = 120, min_route: int = 2000,
+                 min_carrier: int = 200) -> dict:
+    """Per-route taxi-out histograms sliced by airline x day-of-week x time-of-day."""
+    counts = df.groupby(["Origin", "Dest"]).size().sort_values(ascending=False)
+    top = counts[counts >= min_route].head(top_n).index
+
+    routes = {}
+    for origin, dest in top:
+        sub = df[(df["Origin"] == origin) & (df["Dest"] == dest)]
+        airlines = {}
+        for carrier, cg in sub.groupby("Reporting_Airline"):
+            if len(cg) < min_carrier:
+                continue
+            cells = [[{"h": [0] * NBINS, "g": [0] * NBINS} for _ in range(4)] for _ in range(7)]
+            for (d, t, b), n in cg.groupby(["dow", "tod", "binidx"]).size().items():
+                cells[int(d)][int(t)]["h"][int(b)] = int(n)
+            on_time = cg[cg["DepDel15"] == 0]
+            for (d, t, b), n in on_time.groupby(["dow", "tod", "binidx"]).size().items():
+                cells[int(d)][int(t)]["g"][int(b)] = int(n)
+            airlines[carrier] = {"name": AIRLINE_NAMES.get(carrier, carrier), "cells": cells}
+        if airlines:
+            routes[f"{origin}-{dest}"] = {"origin": origin, "dest": dest, "airlines": airlines}
+
+    return {
+        "bin_edges": BIN_EDGES,
+        "tod_labels": TOD_LABELS,
+        "dow_labels": DOW_LABELS,
+        "routes": routes,
+    }
 
 
 def main():
@@ -195,6 +251,14 @@ def main():
     size_mb = out_path.stat().st_size / 1e6
     print(f"\nWrote {out_path} ({size_mb:.1f} MB)")
     print(f"  {len(airlines)} airlines, {len(airports)} airports, {len(trends)} trend points")
+
+    print("Building route distributions…")
+    routes_doc = build_routes(add_derived(df))
+    routes_path = out_dir / "routes.json"
+    with open(routes_path, "w") as f:
+        json.dump(routes_doc, f, separators=(",", ":"))
+    rsize = routes_path.stat().st_size / 1e6
+    print(f"Wrote {routes_path} ({rsize:.1f} MB, {len(routes_doc['routes'])} routes)")
 
 
 if __name__ == "__main__":

@@ -34,9 +34,10 @@ export interface MonthlyTrend {
   year: number
   month: number
   carrier_code: string
-  mean: number
   median: number
+  p90: number
   p95: number
+  trap_rate: number
   count: number
 }
 
@@ -54,4 +55,34 @@ export interface SummaryData {
   airlines: AirlineStats[]
   airports: AirportStats[]
   trends: MonthlyTrend[]
+}
+
+// ---- Routes explorer ----
+
+/** One airline x day-of-week x time-of-day cell: taxi-out histograms. */
+export interface RouteCell {
+  /** counts per taxi-out bin, all flights */
+  h: number[]
+  /** counts per taxi-out bin, flights that pushed back on time at the gate */
+  g: number[]
+}
+
+export interface RouteAirline {
+  name: string
+  /** cells[dayOfWeek 0-6][timeOfDay 0-3] */
+  cells: RouteCell[][]
+}
+
+export interface RouteEntry {
+  origin: string
+  dest: string
+  airlines: Record<string, RouteAirline>
+}
+
+export interface RoutesData {
+  /** length NBINS+1; final edge (999) is the open-ended "120+" bucket */
+  bin_edges: number[]
+  tod_labels: string[]
+  dow_labels: string[]
+  routes: Record<string, RouteEntry>
 }

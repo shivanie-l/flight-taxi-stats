@@ -3,6 +3,8 @@ import { clsx } from 'clsx'
 
 const links = [
   { to: '/', label: 'Overview' },
+  { to: '/routes', label: 'Routes' },
+  { to: '/trends', label: 'Trends' },
   { to: '/airlines', label: 'Airlines' },
   { to: '/airports', label: 'Airports' },
   { to: '/about', label: 'About' },

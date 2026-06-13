@@ -3,6 +3,8 @@ import Nav from './components/Nav'
 import Overview from './pages/Overview'
 import Airlines from './pages/Airlines'
 import Airports from './pages/Airports'
+import Explorer from './pages/Explorer'
+import Trends from './pages/Trends'
 import About from './pages/About'
 
 export default function App() {
@@ -12,6 +14,8 @@ export default function App() {
       <main>
         <Routes>
           <Route path="/" element={<Overview />} />
+          <Route path="/routes" element={<Explorer />} />
+          <Route path="/trends" element={<Trends />} />
           <Route path="/airlines" element={<Airlines />} />
           <Route path="/airports" element={<Airports />} />
           <Route path="/about" element={<About />} />
