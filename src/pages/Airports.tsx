@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { useSummaryData } from '../lib/useData'
-import RankTable from '../components/RankTable'
-import type { AirportStats } from '../lib/types'
+import RankTable, { type SortKey } from '../components/RankTable'
 
 export default function Airports() {
   const { data, loading, error } = useSummaryData()
-  const [sortKey, setSortKey] = useState<keyof AirportStats>('median')
+  const [sortKey, setSortKey] = useState<SortKey>('median')
   const [search, setSearch] = useState('')
 
   if (loading) return <div className="p-8 text-slate-400">Loading…</div>
@@ -39,7 +38,7 @@ export default function Airports() {
       <RankTable
         rows={rows}
         sortKey={sortKey}
-        onSort={k => setSortKey(k as keyof AirportStats)}
+        onSort={setSortKey}
         title=""
       />
     </div>

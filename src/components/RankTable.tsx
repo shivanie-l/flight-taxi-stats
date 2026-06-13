@@ -1,8 +1,8 @@
 import { fmtMinutes, fmtPct, taxiColor } from '../lib/format'
-import PercentileBar from './PercentileBar'
-import type { AirlineStats, AirportStats } from '../lib/types'
+import type { AirlineStats, AirportStats, PercentileStats } from '../lib/types'
 
 type Row = AirlineStats | AirportStats
+export type SortKey = keyof PercentileStats
 
 function isAirline(r: Row): r is AirlineStats {
   return 'carrier_code' in r
@@ -10,13 +10,12 @@ function isAirline(r: Row): r is AirlineStats {
 
 interface Props {
   rows: Row[]
-  sortKey: keyof Row
-  onSort: (k: keyof Row) => void
+  sortKey: SortKey
+  onSort: (k: SortKey) => void
   title: string
-  searchPlaceholder?: string
 }
 
-const cols: { key: keyof Row; label: string; numeric: boolean }[] = [
+const cols: { key: SortKey; label: string; numeric: boolean }[] = [
   { key: 'median', label: 'Median', numeric: true },
   { key: 'p90', label: 'p90', numeric: true },
   { key: 'p95', label: 'p95', numeric: true },
@@ -26,7 +25,7 @@ const cols: { key: keyof Row; label: string; numeric: boolean }[] = [
   { key: 'count', label: 'Flights', numeric: true },
 ]
 
-export default function RankTable({ rows, sortKey, onSort, title, searchPlaceholder }: Props) {
+export default function RankTable({ rows, sortKey, onSort, title }: Props) {
   return (
     <div>
       <h2 className="text-xl font-semibold mb-4">{title}</h2>
