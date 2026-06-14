@@ -1,6 +1,6 @@
 import type { RouteEntry } from './types'
 
-/** The taxi-out minute that separates "on-time trap" flights (taxi-out > this). */
+/** Taxi-out >= this many minutes counts as an "on-time trap" flight. */
 export const TRAP_THRESHOLD = 15
 
 export interface Aggregated {

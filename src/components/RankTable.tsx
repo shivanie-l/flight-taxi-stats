@@ -83,7 +83,7 @@ export default function RankTable({ rows, sortKey, onSort, title }: Props) {
         </table>
       </div>
       <p className="mt-2 text-xs text-slate-500">
-        "On-time trap" = % of flights marked on-time at gate but with taxi-out &gt; 15 min
+        "On-time trap" = % of flights marked on-time at the gate but with taxi-out of 15 min or more
       </p>
     </div>
   )

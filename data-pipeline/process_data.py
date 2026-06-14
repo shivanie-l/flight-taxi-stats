@@ -4,6 +4,8 @@ Aggregate raw parquet files into summary.json for the frontend.
 Usage:
   python data-pipeline/process_data.py --input data-pipeline/raw --output public/data
 """
+from __future__ import annotations
+
 import argparse
 import json
 from datetime import date
@@ -39,6 +41,13 @@ AIRLINE_NAMES = {
     "OH": "PSA Airlines",
     "YV": "Mesa Airlines",
     "PT": "Piedmont Airlines",
+    "9E": "Endeavor Air",
+    "G7": "GoJet Airlines",
+    "ZW": "Air Wisconsin",
+    "C5": "CommuteAir",
+    "EM": "Empire Airlines",
+    "9K": "Cape Air",
+    "KS": "PenAir",
 }
 
 AIRPORT_NAMES: dict[str, tuple[str, str, str]] = {
@@ -106,10 +115,10 @@ def build_airlines(df: pd.DataFrame) -> list[dict]:
     for carrier, grp in df.groupby("Reporting_Airline"):
         stats = percentile_stats(grp["TaxiOut"])
         stats["pct_over_30"] = round(float((grp["TaxiOut"] > 30).mean()), 4)
-        # On-time trap: marked on-time at gate (DepDel15==0) but taxi > 15 min
+        # On-time trap: marked on-time at gate (DepDel15==0) but taxi-out >= 15 min
         on_time_mask = grp["DepDel15"] == 0
         if on_time_mask.sum() > 0:
-            trap = float((grp.loc[on_time_mask, "TaxiOut"] > 15).mean())
+            trap = float((grp.loc[on_time_mask, "TaxiOut"] >= TRAP_THRESHOLD).mean())
         else:
             trap = 0.0
         stats["pct_gate_ontime_tarmac_delayed"] = round(trap, 4)
@@ -131,7 +140,7 @@ def build_airports(df: pd.DataFrame, min_flights: int = 5000) -> list[dict]:
         stats["pct_over_30"] = round(float((grp["TaxiOut"] > 30).mean()), 4)
         on_time_mask = grp["DepDel15"] == 0
         if on_time_mask.sum() > 0:
-            trap = float((grp.loc[on_time_mask, "TaxiOut"] > 15).mean())
+            trap = float((grp.loc[on_time_mask, "TaxiOut"] >= TRAP_THRESHOLD).mean())
         else:
             trap = 0.0
         stats["pct_gate_ontime_tarmac_delayed"] = round(trap, 4)
@@ -149,7 +158,7 @@ def build_trends(df: pd.DataFrame) -> list[dict]:
         if len(grp) < 100:
             continue
         on_time = grp[grp["DepDel15"] == 0]
-        trap = float((on_time["TaxiOut"] > TRAP_THRESHOLD).mean()) if len(on_time) else 0.0
+        trap = float((on_time["TaxiOut"] >= TRAP_THRESHOLD).mean()) if len(on_time) else 0.0
         result.append({
             "year": int(year),
             "month": int(month),

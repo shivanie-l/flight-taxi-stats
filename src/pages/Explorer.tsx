@@ -125,7 +125,7 @@ export default function Explorer() {
             <StatCard
               label="On-time trap rate"
               value={fmtPct(result.trap)}
-              sub="gate on-time but >15m tarmac"
+              sub="gate on-time but 15m+ on tarmac"
             />
           </div>
 
@@ -134,7 +134,7 @@ export default function Explorer() {
             <div>
               <div className="text-sm text-orange-300 font-medium">If you do get trapped on this route…</div>
               <div className="text-slate-400 text-sm">
-                Among flights that pushed back "on time" but sat past 15 min, half waited at least:
+                Among flights that pushed back "on time" but sat 15 min or more, half waited at least:
               </div>
             </div>
             <div className="text-3xl font-bold text-orange-400 whitespace-nowrap">

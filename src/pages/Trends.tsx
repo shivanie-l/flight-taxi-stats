@@ -97,7 +97,7 @@ export default function Trends() {
       <div>
         <h2 className="text-xl font-semibold mb-1">On-time trap rate by airline</h2>
         <p className="text-sm text-slate-500 mb-4">
-          Share of gate-on-time flights that still sat on the tarmac more than 15 minutes.
+          Share of gate-on-time flights that still sat on the tarmac 15 minutes or more.
         </p>
         <div className="rounded-xl bg-slate-900 border border-slate-800 p-4">
           <ResponsiveContainer width="100%" height={360}>

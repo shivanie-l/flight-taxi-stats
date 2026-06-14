@@ -37,8 +37,10 @@ export default function About() {
         <p className="text-slate-300 leading-relaxed">
           The <strong className="text-white">"on-time trap" rate</strong> is our invented metric:
           the percentage of flights that were recorded as on-time at gate departure but had a
-          taxi-out time exceeding 15 minutes. These are flights where the official metric
-          looks good but the passenger experience was not.
+          taxi-out time of 15 minutes or more. We use the same 15-minute cutoff the DOT uses to
+          define an "on-time" departure — so these are flights where the official metric looks
+          good but the passenger sat on the plane at least as long as the delay the metric is
+          supposed to catch.
         </p>
       </section>
 
