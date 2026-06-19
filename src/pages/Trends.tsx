@@ -1,41 +1,25 @@
 import { useMemo, useState } from 'react'
 import { useSummaryData } from '../lib/useData'
-import { monthLabel } from '../lib/format'
+import { pivotTrends, carriersOf, paddedDomain, TREND_COLORS } from '../lib/trends'
 import { clsx } from 'clsx'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts'
-import type { MonthlyTrend } from '../lib/types'
-
-const COLORS = ['#3b82f6', '#f97316', '#22c55e', '#a855f7', '#ec4899', '#14b8a6', '#f59e0b', '#ef4444']
 
 type Metric = 'median' | 'p90' | 'p95'
 const METRICS: { key: Metric; label: string }[] = [
-  { key: 'median', label: 'Median' },
-  { key: 'p90', label: '90th pct' },
   { key: 'p95', label: '95th pct' },
+  { key: 'p90', label: '90th pct' },
+  { key: 'median', label: 'Median' },
 ]
-
-function pivot(trends: MonthlyTrend[], field: keyof MonthlyTrend) {
-  const byMonth: Record<string, Record<string, number | string>> = {}
-  for (const t of trends) {
-    const key = `${t.year}-${String(t.month).padStart(2, '0')}`
-    if (!byMonth[key]) byMonth[key] = { label: monthLabel(t.year, t.month), _sort: key }
-    byMonth[key][t.carrier_code] = t[field] as number
-  }
-  return Object.values(byMonth).sort((a, b) => String(a._sort).localeCompare(String(b._sort)))
-}
 
 export default function Trends() {
   const { data, loading, error } = useSummaryData()
-  const [metric, setMetric] = useState<Metric>('median')
+  const [metric, setMetric] = useState<Metric>('p95')
 
-  const carriers = useMemo(
-    () => (data ? [...new Set(data.trends.map(t => t.carrier_code))] : []),
-    [data],
-  )
-  const taxiData = useMemo(() => (data ? pivot(data.trends, metric) : []), [data, metric])
-  const trapData = useMemo(() => (data ? pivot(data.trends, 'trap_rate') : []), [data])
+  const carriers = useMemo(() => (data ? carriersOf(data.trends) : []), [data])
+  const taxiData = useMemo(() => (data ? pivotTrends(data.trends, metric) : []), [data, metric])
+  const trapData = useMemo(() => (data ? pivotTrends(data.trends, 'trap_rate') : []), [data])
 
   if (loading) return <div className="p-8 text-slate-400">Loading…</div>
   if (error || !data) return <div className="p-8 text-red-400">Failed to load data.</div>
@@ -79,14 +63,15 @@ export default function Trends() {
             <LineChart data={taxiData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11 }} minTickGap={20} />
-              <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} unit="m" />
+              <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} unit="m" domain={paddedDomain(3)} />
               <Tooltip
+                formatter={(v: number) => `${v} min`}
                 contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8 }}
                 labelStyle={{ color: '#e2e8f0' }}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               {carriers.map((c, i) => (
-                <Line key={c} type="monotone" dataKey={c} stroke={COLORS[i % COLORS.length]} dot={false} strokeWidth={2} />
+                <Line key={c} type="monotone" dataKey={c} stroke={TREND_COLORS[i % TREND_COLORS.length]} dot={false} strokeWidth={2} />
               ))}
             </LineChart>
           </ResponsiveContainer>
@@ -104,7 +89,11 @@ export default function Trends() {
             <LineChart data={trapData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
               <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11 }} minTickGap={20} />
-              <YAxis tickFormatter={v => `${Math.round(Number(v) * 100)}%`} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+              <YAxis
+                tickFormatter={v => `${Math.round(Number(v) * 100)}%`}
+                tick={{ fill: '#94a3b8', fontSize: 11 }}
+                domain={[(min: number) => Math.max(0, min - 0.05), (max: number) => Math.min(1, max + 0.05)]}
+              />
               <Tooltip
                 formatter={(v: number) => `${(v * 100).toFixed(1)}%`}
                 contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8 }}
@@ -112,7 +101,7 @@ export default function Trends() {
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               {carriers.map((c, i) => (
-                <Line key={c} type="monotone" dataKey={c} stroke={COLORS[i % COLORS.length]} dot={false} strokeWidth={2} />
+                <Line key={c} type="monotone" dataKey={c} stroke={TREND_COLORS[i % TREND_COLORS.length]} dot={false} strokeWidth={2} />
               ))}
             </LineChart>
           </ResponsiveContainer>

@@ -1,11 +1,11 @@
 import { useSummaryData } from '../lib/useData'
-import { fmtMinutes, fmtPct, fmtCount, monthLabel } from '../lib/format'
+import { fmtMinutes, fmtPct, fmtCount } from '../lib/format'
+import { pivotTrends, carriersOf, paddedDomain, TREND_COLORS } from '../lib/trends'
 import StatCard from '../components/StatCard'
 import PercentileBar from '../components/PercentileBar'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts'
-import type { MonthlyTrend } from '../lib/types'
 
 function overallStats(airlines: ReturnType<typeof useSummaryData>['data']) {
   if (!airlines) return null
@@ -18,20 +18,6 @@ function overallStats(airlines: ReturnType<typeof useSummaryData>['data']) {
   return { weightedMean, weightedMedian, weightedP95, weightedTrap }
 }
 
-function buildTrendData(trends: MonthlyTrend[]) {
-  const byMonth: Record<string, { label: string; [carrier: string]: number | string }> = {}
-  for (const t of trends) {
-    const key = `${t.year}-${String(t.month).padStart(2, '0')}`
-    if (!byMonth[key]) byMonth[key] = { label: monthLabel(t.year, t.month) }
-    byMonth[key][t.carrier_code] = t.median
-  }
-  return Object.entries(byMonth)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([, v]) => v)
-}
-
-const COLORS = ['#3b82f6', '#f97316', '#22c55e', '#a855f7', '#ec4899', '#14b8a6', '#f59e0b']
-
 export default function Overview() {
   const { data, loading, error } = useSummaryData()
 
@@ -39,8 +25,14 @@ export default function Overview() {
   if (error || !data) return <div className="p-8 text-red-400">Failed to load data. Run the pipeline first.</div>
 
   const stats = overallStats(data)!
-  const trendData = buildTrendData(data.trends)
-  const carriers = [...new Set(data.trends.map(t => t.carrier_code))].slice(0, 7)
+  const p95Data = pivotTrends(data.trends, 'p95')
+  const trapData = pivotTrends(data.trends, 'trap_rate')
+  // Rank carriers by volume so the busiest airlines lead the legend.
+  const carriers = [...data.airlines]
+    .sort((a, b) => b.count - a.count)
+    .map(a => a.carrier_code)
+    .filter(c => carriersOf(data.trends).includes(c))
+    .slice(0, 8)
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-10">
@@ -81,33 +73,61 @@ export default function Overview() {
         <StatCard
           label='"On-time" trap rate'
           value={fmtPct(stats.weightedTrap)}
-          sub='Gate on-time but >15m tarmac wait'
+          sub='Gate on-time but 15m+ on tarmac'
         />
       </div>
 
-      {/* Trend chart */}
+      {/* Trap-rate trend — the headline story */}
       <div>
-        <h2 className="text-xl font-semibold mb-4">Median taxi-out time by airline over time</h2>
+        <h2 className="text-xl font-semibold mb-1">"On-time trap" rate by airline over time</h2>
+        <p className="text-sm text-slate-500 mb-4">
+          Share of gate-on-time flights that still sat on the tarmac 15 minutes or more — the
+          passengers the official metric quietly ignores.
+        </p>
         <div className="rounded-xl bg-slate-900 border border-slate-800 p-4">
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={trendData}>
+            <LineChart data={trapData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-              <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} unit="m" />
+              <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11 }} minTickGap={20} />
+              <YAxis
+                tickFormatter={v => `${Math.round(Number(v) * 100)}%`}
+                tick={{ fill: '#94a3b8', fontSize: 11 }}
+                domain={[(min: number) => Math.max(0, min - 0.05), (max: number) => Math.min(1, max + 0.05)]}
+              />
               <Tooltip
+                formatter={(v: number) => `${(v * 100).toFixed(1)}%`}
                 contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8 }}
                 labelStyle={{ color: '#e2e8f0' }}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               {carriers.map((c, i) => (
-                <Line
-                  key={c}
-                  type="monotone"
-                  dataKey={c}
-                  stroke={COLORS[i % COLORS.length]}
-                  dot={false}
-                  strokeWidth={2}
-                />
+                <Line key={c} type="monotone" dataKey={c} stroke={TREND_COLORS[i % TREND_COLORS.length]} dot={false} strokeWidth={2} />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* p95 trend */}
+      <div>
+        <h2 className="text-xl font-semibold mb-1">95th-percentile taxi-out by airline over time</h2>
+        <p className="text-sm text-slate-500 mb-4">
+          The unlucky 1-in-20 wait. Unlike the median, the tail moves with seasons and congestion.
+        </p>
+        <div className="rounded-xl bg-slate-900 border border-slate-800 p-4">
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={p95Data}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 11 }} minTickGap={20} />
+              <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} unit="m" domain={paddedDomain(3)} />
+              <Tooltip
+                formatter={(v: number) => `${v} min`}
+                contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8 }}
+                labelStyle={{ color: '#e2e8f0' }}
+              />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              {carriers.map((c, i) => (
+                <Line key={c} type="monotone" dataKey={c} stroke={TREND_COLORS[i % TREND_COLORS.length]} dot={false} strokeWidth={2} />
               ))}
             </LineChart>
           </ResponsiveContainer>
